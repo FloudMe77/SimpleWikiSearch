@@ -51,3 +51,4 @@ class Simplifier:
                 simplified_lemmas.append(lemma)
                     
         return simplified_lemmas
+    

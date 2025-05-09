@@ -13,9 +13,12 @@ import os
 class Engine:
 
     def __init__(self, database_name = '', svd_on = False, k = None):
+        # svd_on - determinuje, czy używamy svd przy wyszukiwaniu, czy nie
+        # k - liczba największych wartości osobliwych (singular values) w SVD
 
         word_matrix_path = f"saved_data/csc_BOW_{database_name}.npz"
         word_structures_path = f"saved_data/word_structures_{database_name}.pkl"
+        print(word_structures_path)
         self.is_matrix_saved = self.file_exist(word_matrix_path) and self.file_exist(word_structures_path)
         self.database_name = database_name
 
@@ -59,6 +62,7 @@ class Engine:
 
     def add_article(self, id, content):
         words = self.simplifier.simplify_words(content)
+        # indeksy w bazie danych zaczynają się od 1, a w macierzy od 0
         new_tuples = self.content_to_tuple_matrix(words, id-1)
         
         self.tuple_BOW.extend(new_tuples)
@@ -112,11 +116,19 @@ class Engine:
         # w zależności czy svd
         return self.handleQueryUVD(query_vector, top) if self.svd_on else self.handleQueryNormal(query_vector, top)
     
+    def handleQueryUVDClassic(self, query_vector, top=10):
+        # query_vector: sparse (n_words,)
+        # 1. Normalizacja zapytania
+        normalized_query = query_vector / linalg.norm(query_vector)
+        result = (normalized_query.T @ self.U @ self.D @ self.Vt).T  # (N, 1)
+        similarities = result.flatten()
+        top_indices = heapq.nlargest(top, range(len(similarities)), key=lambda i: similarities[i])
 
+        return [(i, round(similarities[i]*100,1)) for i in top_indices]
     def handleQueryNormal(self, query_vector, top):
         normalized_query = query_vector / linalg.norm(query_vector)
         result = np.abs((normalized_query.T @ self.csc_BOW)).T  # (N, 1)
-        similarities = result.toarray().flatten()
+        similarities = result.flatten()
         top_indices = heapq.nlargest(top, range(len(similarities)), key=lambda i: similarities[i])
 
         return [(i, round(similarities[i]*100,1)) for i in top_indices]
@@ -128,7 +140,7 @@ class Engine:
         self.U = U
         self.Vt = Vt
         self.D = diags(D)
-        self.D_values = D.astype('float32')  
+        self.D_values = D.astype('float32')  # przyda się później
 
         # Przekształcamy dokumenty do przestrzeni zredukowanej
         X_reduced = (np.diag(D) @ Vt).T.astype('float32')  # shape: (n_docs, k)
@@ -136,17 +148,15 @@ class Engine:
         # Budujemy HNSW index
         dim = self.k
         self.index = hnswlib.Index(space='cosine', dim=dim)
-        self.index.init_index(max_elements=X_reduced.shape[0], ef_construction=400, M=32)
+        self.index.init_index(max_elements=X_reduced.shape[0], ef_construction=200, M=32)
         self.index.add_items(X_reduced)
-        self.index.set_ef(300)
+        self.index.set_ef(200)
 
         print("end decomposition + HNSW")
         self.save_SVD_to_file()
 
     def handleQueryUVD(self, query_vector, top=10):
-        # query_vector: sparse (n_words,)
-        # 1. Normalizacja zapytania
-        # if self.idf_diag is not None:
+        # if self.idf_diag:
         #     query_vector = self.idf_diag @ query_vector
 
         norm = linalg.norm(query_vector)
@@ -159,20 +169,10 @@ class Engine:
         q = self.D @ q
         q_dense = q.flatten().astype('float32').reshape(1, -1)
 
-        # 3. Szukanie przez HNSW
+        # Szukanie przez HNSW
         labels, distances = self.index.knn_query(q_dense, k=top)
 
         return [(int(i), round((1 - d) * 100, 1)) for i, d in zip(labels[0], distances[0])]
-
-    def handleQueryUVDClassic(self, query_vector, top=10):
-        # query_vector: sparse (n_words,)
-        # 1. Normalizacja zapytania
-        normalized_query = query_vector / linalg.norm(query_vector)
-        result = (normalized_query.T @ self.U @ self.D @ self.Vt).T  # (N, 1)
-        similarities = result.flatten()
-        top_indices = heapq.nlargest(top, range(len(similarities)), key=lambda i: similarities[i])
-
-        return [(i, round(similarities[i]*100,1)) for i in top_indices]
 
     def info(self):
         print(self.csc_BOW.shape)

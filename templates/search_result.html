@@ -1,0 +1,44 @@
+{% extends "layout.html" %}
+
+{% block page_title %}Results for "{{ title }}" - WikiSearch{% endblock %}
+
+{% block main_content %}
+<div class="container results-page">
+    <header class="app-header results-header">
+        <div class="logo"></div>
+        <h1>WikiSearch</h1>
+    </header>
+    
+    <form action="/flask_app" method="get" class="search-form-wrapper" id="searchForm">
+        <div class="search-form">
+            <input type="text" name="fraze" id="fraze" placeholder="Enter phrase" value="{{ title if title else '' }}" />
+            <button type="submit">Search</button>
+        </div>
+        <input type="hidden" name="num_results" id="hiddenNumResults" value="{{ current_num_results }}">
+    </form>
+
+    <div class="query-summary">
+        <p>Found {{ result_count }} results for "<strong>{{ title }}</strong>" in {{ query_time }} seconds.</p>
+    </div>
+    <hr class="results-divider">
+
+    <div class="search-results-list">
+        {% if results %}
+            {% for item in results %}
+            <div class="result-item">
+                <div class="result-score">
+                    <span>{{ "%.2f"|format(item.rate) }}%</span>
+                    <small>Score</small>
+                </div>
+                <div class="result-content">
+                    <h2><a href="{{ item.url }}" target="_blank" rel="noopener noreferrer">{{ item.title }}</a></h2>
+                    <p class="result-intro">{{ item.intro }}</p>
+                    <a href="{{ item.url }}" class="result-url" target="_blank" rel="noopener noreferrer">{{ item.url }}</a>
+                </div>
+            </div>
+            {% endfor %}
+        {% elif title %} <p class="no-results">No results found for "<strong>{{ title }}</strong>". Try a different query.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

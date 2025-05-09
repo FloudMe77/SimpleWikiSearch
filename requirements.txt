@@ -1,0 +1,12 @@
+flask
+mwxml
+mwparserfromhell
+sqlite3
+requests
+beautifulsoup4
+numpy
+scipy
+scikit-learn
+heapq
+hnswlib
+pickle

@@ -23,9 +23,9 @@ class Search_engine_manager:
         n_words = len(self.en.number_to_word)
         return csc_matrix((values, (indices, [0] * len(indices))), shape=(n_words, 1))
     
-    def hendle_query(self,query):
+    def hendle_query(self, query, number_of_position = 10):
         query_vector = self.parse_query(query)
-        return self.en.handleQuery(query_vector, 10)
+        return self.en.handleQuery(query_vector, number_of_position)
 
     def press_db_in_engine(self):
         print("start parsing database")
@@ -35,4 +35,3 @@ class Search_engine_manager:
         for id,content in cursor.fetchall():
             self.en.add_article(id,content)
         print("Matrix built")
-

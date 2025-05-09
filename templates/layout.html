@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block page_title %}WikiSearch{% endblock %}</title>
+    <link href="{{ url_for('static', filename='styles/style.css') }}" rel="stylesheet" />
+</head>
+<body>
+    <div class="page-wrapper">
+        <aside class="side-panel">
+            <div class="side-panel-content">
+                <h3>Info Panel</h3>
+                <div class="info-item">
+                    <span class="info-label">Database:</span>
+                    <span class="info-value">{{ database_name }}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">SVD Dimensions (k):</span>
+                    <span class="info-value">{{ k_value_svd }}</span>
+                </div>
+                <hr class="info-divider">
+                
+                <div class="results-slider-group">
+                    <label for="num_results_slider">Results to show:</label>
+                    <input type="range" id="num_results_slider" 
+                           min="{{ num_results_options[0] }}" 
+                           max="{{ num_results_options[-1] }}" 
+                           step="{{ num_results_step }}" 
+                           value="{{ current_num_results }}">
+                    <span id="slider_value_display" class="slider-value">{{ current_num_results }} results</span>
+                </div>
+
+                <hr class="info-divider">
+                <h4>About</h4>
+                <p class="about-text">
+                    This search engine uses Hierarchical Navigable Small World (HNSW) index with SVD to find articles semantically similar to your query.
+                </p>
+                <p class="about-text">
+                    Built with Flask & Python.
+                </p>
+            </div>
+        </aside>
+        <main class="main-content">
+            {% block main_content %}{% endblock %}
+        </main>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const slider = document.getElementById('num_results_slider');
+            const sliderValueDisplay = document.getElementById('slider_value_display');
+            const searchForm = document.getElementById('searchForm'); 
+            let hiddenNumResults = document.getElementById('hiddenNumResults');
+
+            if (slider && sliderValueDisplay && searchForm) {
+                sliderValueDisplay.innerText = slider.value + ' results';
+
+                if (!hiddenNumResults) {
+                    hiddenNumResults = document.createElement('input');
+                    hiddenNumResults.type = 'hidden';
+                    hiddenNumResults.name = 'num_results';
+                    hiddenNumResults.id = 'hiddenNumResults';
+                    searchForm.appendChild(hiddenNumResults);
+                }
+                hiddenNumResults.value = slider.value; 
+
+                slider.addEventListener('input', function() {
+                    sliderValueDisplay.innerText = this.value + ' results';
+                    hiddenNumResults.value = this.value; 
+                    // Usunięto: searchForm.submit();
+                });
+            }
+        });
+    </script>
+</body>
+</html>

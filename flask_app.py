@@ -1,53 +1,77 @@
-from flask import Flask, render_template, request
-import search_engine_manager
-import sqlite3
-import database_manager
+from flask import Flask, render_template, request, current_app
+import search_engine_manager 
+import database_manager 
+import time
 
 app = Flask(__name__)
 
 # Configuration
 DATABASE_NAME = 'simplewiki100'
-SEARCH_ENGINE = search_engine_manager.Search_engine_manager(DATABASE_NAME, svd_on=True, k=200)
-# SEARCH_ENGINE = search_engine_manager.Search_engine_manager(DATABASE_NAME, svd_on=True, k=750)
-# SEARCH_ENGINE = search_engine_manager.Search_engine_manager(DATABASE_NAME, svd_on=True, k=300, start=False)
+K_SVD_VALUE = 200 
+
+SEARCH_ENGINE = search_engine_manager.Search_engine_manager(DATABASE_NAME, svd_on=True, k=K_SVD_VALUE)
 DB_MANAGER = database_manager.DatabaseManager(DATABASE_NAME)
+DEFAULT_NUM_RESULTS = 10
+NUM_RESULTS_OPTIONS = [10, 25, 50] 
+NUM_RESULTS_STEP = 5 
 
-
-def get_data(items, index_tab):
-    """Fetch data from the database based on given item fields and indices."""
-    conn = sqlite3.connect(f"{DATABASE_NAME}.db")
-    cursor = conn.cursor()
-    placeholders = ','.join(str(i + 1) for i in index_tab)
-    query = f"SELECT {items} FROM articles WHERE id IN ({placeholders})"
-    return cursor.execute(query).fetchall()
-
+common_template_data = {
+    "database_name": DATABASE_NAME,
+    "k_value_svd": K_SVD_VALUE,
+    "num_results_options": NUM_RESULTS_OPTIONS,
+    "num_results_step": NUM_RESULTS_STEP 
+}
 
 @app.route('/')
 @app.route('/index')
 def index():
-    """Render the index page."""
-    return render_template('index.html')
-
+    return render_template('index.html', 
+                           **common_template_data,
+                           current_num_results=DEFAULT_NUM_RESULTS)
 
 @app.route('/flask_app')
 def get_search():
-    """Handle search queries and render search results."""
     fraze = request.args.get("fraze")
-    raw_data = SEARCH_ENGINE.hendle_query(fraze)
-    indexes, rates = zip(*raw_data)
-    indexes = list(indexes)
-    rates = list(rates)
+    
+    num_results = int(request.args.get("num_results", DEFAULT_NUM_RESULTS))
 
-    results = [
-        {"url": url, "title": title, "intro": intro}
-        for url, title, intro in DB_MANAGER.get_data("url, title, intro", indexes)
-    ]
+    if not fraze:
+        app.logger.info("Search phrase is empty. Redirecting to index.")
+        return render_template('index.html', 
+                               error="Please enter a search phrase.",
+                               **common_template_data,
+                               current_num_results=num_results)
+    start_time = time.time()
+    raw_data = SEARCH_ENGINE.hendle_query(fraze, number_of_position=num_results) 
+    results = []
+    if raw_data and isinstance(raw_data, list):
+        if raw_data: 
+            indexes, rates_raw = zip(*raw_data)
+            indexes = list(indexes)
 
-    for i, rate in enumerate(rates):
-        results[i]["rate"] = rate
+            results_db = DB_MANAGER.get_data("url, title, intro", indexes)
+            
+            for i, db_row in enumerate(results_db):
+                if i < len(rates_raw): 
+                    url, title, intro = db_row
+                    results.append({
+                        "url": url,
+                        "title": title,
+                        "intro": intro,
+                        "rate": round(rates_raw[i], 2) 
+                    })
+            results.sort(key=lambda x: x["rate"], reverse=True)
 
-    return render_template("search_result.html", title=fraze, results=results)
+    total_time = time.time() - start_time
+    query_time_formatted = "{:.3f}".format(total_time)
 
+    return render_template("search_result.html", 
+                            title=fraze, 
+                            results=results, 
+                            query_time=query_time_formatted, 
+                            result_count=len(results),
+                            **common_template_data,
+                            current_num_results=num_results)
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8000)
